@@ -3,6 +3,7 @@ const Message = require('../models/Message');
 // Send Message
 const sendMessage = async (req, res) => {
   try {
+
     const { roomId, content } = req.body;
 
     const message = await Message.create({
@@ -15,24 +16,85 @@ const sendMessage = async (req, res) => {
       success: true,
       message
     });
+
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+
   }
 };
 
-// Get Messages in a Room
+// Get Room Messages
 const getMessages = async (req, res) => {
   try {
+
     const { roomId } = req.params;
 
-    const messages = await Message.find({ roomId })
-      .populate('sender', 'name')
-      .sort({ createdAt: 1 });
+    const messages = await Message.find({
+      roomId
+    })
+    .populate('sender', 'name')
+    .sort({ createdAt: 1 });
 
-    res.json({ success: true, messages });
+    res.json({
+      success: true,
+      messages
+    });
+
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+
   }
 };
 
-module.exports = { sendMessage, getMessages };
+// Get Private Messages
+const getPrivateMessages = async (req, res) => {
+  try {
+
+    const { user1, user2 } = req.params;
+
+    const messages = await Message.find({
+
+      $or: [
+
+        {
+          sender: user1,
+          receiver: user2
+        },
+
+        {
+          sender: user2,
+          receiver: user1
+        }
+
+      ]
+
+    })
+    .populate('sender', 'name')
+    .populate('receiver', 'name')
+    .sort({ createdAt: 1 });
+
+    res.json(messages);
+
+  } catch (error) {
+
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+
+  }
+};
+
+module.exports = {
+  sendMessage,
+  getMessages,
+  getPrivateMessages
+};
