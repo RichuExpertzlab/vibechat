@@ -5,14 +5,15 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 
 const connectDB = require('./src/config/db');
+
 const authRoutes = require('./src/routes/auth.routes');
 const chatRoutes = require('./src/routes/chat.routes');
 const userRoutes = require('./src/routes/user.routes');
 
 const Message = require('./src/models/Message');
+const User = require('./src/models/User');
 
 const app = express();
-
 const onlineUsers = new Map();
 
 app.use(cookieParser());
@@ -20,11 +21,13 @@ app.use(cookieParser());
 const server = http.createServer(app);
 
 const io = new Server(server, {
-    cors: {
-        origin: 'http://localhost:5173',
-        credentials: true
-    }
+  cors: {
+    origin: "http://localhost:5173",
+    credentials: true
+  }
 });
+
+app.set("io", io);
 
 app.use(cors({
     origin: 'http://localhost:5173',
@@ -41,17 +44,45 @@ io.on('connection', (socket) => {
 
     console.log('User Connected:', socket.id);
 
-    // Register user for private messaging
-    socket.on('registerUser', (userId) => {
+    // ==========================
+    // REGISTER USER
+    // ==========================
+    socket.on('registerUser', async (userId) => {
 
-        onlineUsers.set(userId, socket.id);
+        try {
 
-        console.log(
-            `User ${userId} registered with socket ${socket.id}`
-        );
+            onlineUsers.set(userId, socket.id);
+
+            await User.findByIdAndUpdate(
+                userId,
+                {
+                    status: 'online'
+                }
+            );
+
+            io.emit(
+                'userStatusChanged',
+                {
+                    userId,
+                    status: 'online'
+                }
+            );
+
+            console.log(
+                `User ${userId} is ONLINE`
+            );
+
+        } catch (err) {
+
+            console.error(err);
+
+        }
+
     });
 
-    // Room Chat
+    // ==========================
+    // ROOM CHAT
+    // ==========================
     socket.on('joinRoom', (roomId) => {
 
         socket.join(roomId);
@@ -59,75 +90,134 @@ io.on('connection', (socket) => {
         console.log(
             `User ${socket.id} joined room ${roomId}`
         );
+
     });
 
     socket.on('sendMessage', (data) => {
 
         io.to(data.roomId)
-            .emit('receiveMessage', data);
+            .emit(
+                'receiveMessage',
+                data
+            );
 
     });
 
-    // Private Chat
+    // ==========================
+    // PRIVATE CHAT
+    // ==========================
     socket.on('privateMessage', async (data) => {
 
-    console.log("PRIVATE MESSAGE RECEIVED");
-    console.log(data);
+        console.log(
+            'PRIVATE MESSAGE RECEIVED'
+        );
 
-    try {
+        console.log(data);
 
-        const message = await Message.create({
+        try {
 
-            sender: data.sender,
-            receiver: data.receiver,
-            content: data.content
+            const message =
+                await Message.create({
 
-        });
+                    sender: data.sender,
+                    receiver: data.receiver,
+                    content: data.content
 
-        console.log("MESSAGE SAVED");
-        console.log(message);
+                });
 
-        const receiverSocketId =
-            onlineUsers.get(data.receiver);
+            console.log(
+                'MESSAGE SAVED'
+            );
 
-        console.log("Receiver Socket:", receiverSocketId);
+            const receiverSocketId =
+                onlineUsers.get(
+                    data.receiver
+                );
 
-        if (receiverSocketId) {
+            // Send to receiver
+            if (receiverSocketId) {
 
-            io.to(receiverSocketId)
-              .emit(
+                io.to(receiverSocketId)
+                    .emit(
+                        'receivePrivateMessage',
+                        message
+                    );
+
+                console.log(
+                    'Sent to receiver'
+                );
+
+            }
+
+            // Send back to sender
+            socket.emit(
                 'receivePrivateMessage',
                 message
-              );
+            );
 
-            console.log("Sent to receiver");
+            console.log(
+                'Sent to sender'
+            );
+
+        } catch (err) {
+
+            console.error(
+                'PRIVATE MESSAGE ERROR'
+            );
+
+            console.error(err);
 
         }
 
-        socket.emit(
-            'receivePrivateMessage',
-            message
-        );
+    });
 
-        console.log("Sent to sender");
+    // ==========================
+    // DISCONNECT
+    // ==========================
+    socket.on('disconnect', async () => {
 
-    } catch (err) {
-
-        console.error("PRIVATE MESSAGE ERROR");
-        console.error(err);
-
-    }
-
-});
-
-    socket.on('disconnect', () => {
+        let disconnectedUserId = null;
 
         for (const [userId, socketId] of onlineUsers.entries()) {
 
             if (socketId === socket.id) {
 
+                disconnectedUserId = userId;
+
                 onlineUsers.delete(userId);
+
                 break;
+
+            }
+
+        }
+
+        if (disconnectedUserId) {
+
+            try {
+
+                await User.findByIdAndUpdate(
+                    disconnectedUserId,
+                    {
+                        status: 'offline'
+                    }
+                );
+
+                io.emit(
+                    'userStatusChanged',
+                    {
+                        userId: disconnectedUserId,
+                        status: 'offline'
+                    }
+                );
+
+                console.log(
+                    `User ${disconnectedUserId} is OFFLINE`
+                );
+
+            } catch (err) {
+
+                console.error(err);
 
             }
 

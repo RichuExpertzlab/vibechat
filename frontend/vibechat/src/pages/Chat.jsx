@@ -38,7 +38,7 @@ export default function Chat() {
 
   }, [user]);
 
-  // Room Messages
+  // Room Chat
   useEffect(() => {
 
     if (!user || selectedUser) return;
@@ -52,7 +52,7 @@ export default function Chat() {
 
   }, [currentRoom, user, selectedUser]);
 
-  // Private Messages
+  // Private Chat
   useEffect(() => {
 
     if (!selectedUser) return;
@@ -95,19 +95,22 @@ export default function Chat() {
   // Receive Private Messages
   useEffect(() => {
 
-  socket.on(
-  "receivePrivateMessage",
-  (message) => {
+    socket.on(
+      "receivePrivateMessage",
+      (message) => {
 
-    console.log("PRIVATE RECEIVED", message);
+        console.log(
+          "PRIVATE RECEIVED",
+          message
+        );
 
-    setMessages(prev => [
-      ...prev,
-      message
-    ]);
+        setMessages(prev => [
+          ...prev,
+          message
+        ]);
 
-  }
-);
+      }
+    );
 
     return () => {
 
@@ -151,7 +154,9 @@ export default function Chat() {
             `/chat/private/${user.id}/${selectedUser._id}`
           );
 
-        setMessages(res.data);
+        setMessages(
+          res.data || []
+        );
 
       } catch (err) {
 
@@ -164,7 +169,6 @@ export default function Chat() {
   const sendMessage =
     async () => {
 
-      console.log("Sending message:", text);
       if (!text.trim()) return;
 
       // PRIVATE MESSAGE
@@ -174,8 +178,7 @@ export default function Chat() {
           "privateMessage",
           {
             sender: user.id,
-            receiver:
-              selectedUser._id,
+            receiver: selectedUser._id,
             content: text
           }
         );
@@ -224,26 +227,35 @@ export default function Chat() {
 
         <Navbar />
 
+        {/* CHAT HEADER */}
+
         <div className="p-4 border-b border-zinc-800 bg-zinc-900 text-white">
 
-          <h2 className="font-bold">
+          <h2 className="font-bold text-lg">
 
             {selectedUser
-              ? `Chat with ${selectedUser.name}`
-              : `#${currentRoom}`}
+              ? `💬 ${selectedUser.name}`
+              : `# ${currentRoom}`}
 
           </h2>
 
         </div>
 
-        <ChatWindow messages={messages} />
+        {/* CHAT WINDOW */}
+
+        <ChatWindow
+          messages={messages}
+          currentUser={user}
+        />
+
+        {/* MESSAGE BOX */}
 
         <div className="p-4 border-t border-zinc-800 bg-zinc-900">
 
           <div className="flex gap-3">
 
             <input
-              className="flex-1 bg-zinc-800 border border-zinc-700 rounded-2xl px-6 py-4"
+              className="flex-1 bg-zinc-800 border border-zinc-700 rounded-2xl px-6 py-4 text-white focus:outline-none"
               value={text}
               onChange={(e) =>
                 setText(e.target.value)
@@ -261,7 +273,7 @@ export default function Chat() {
 
             <button
               onClick={sendMessage}
-              className="px-10 bg-violet-600 hover:bg-violet-700 text-white rounded-2xl"
+              className="px-8 bg-violet-600 hover:bg-violet-700 text-white rounded-2xl"
             >
               Send
             </button>

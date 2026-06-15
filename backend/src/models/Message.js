@@ -24,6 +24,7 @@ const MessageSchema = new mongoose.Schema({
         enum:['text','image'],
         default:'text'
     }
+    
 },{timestamps:true});
 module.exports = mongoose.model('Message', MessageSchema);
     
